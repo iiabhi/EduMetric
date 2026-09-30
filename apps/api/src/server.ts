@@ -2,13 +2,14 @@ import { config as loadDotenv } from 'dotenv';
 import { createApp } from './app.js';
 import { loadConfigOrExit } from './config/index.js';
 import { createLogger } from './lib/logger.js';
+import { buildReadinessChecks } from './modules/health/health.checks.js';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
 loadDotenv({ quiet: true });
 const config = loadConfigOrExit();
 const logger = createLogger(config);
-const app = createApp({ config, logger });
+const app = createApp({ config, logger, readinessChecks: buildReadinessChecks(config) });
 
 const server = app.listen(config.port, () => {
   logger.info({ port: config.port, env: config.env }, 'API listening');

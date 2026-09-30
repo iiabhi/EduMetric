@@ -1,0 +1,165 @@
+# Local development stack (F-02). Copy .env.example to .env first: passwords come from .env,
+# this file contains no credentials (DOCKER-003).
+# worker (F-04) and web (F-06) are added by those features (docs/decisions/0006).
+name: edumetrics
+
+services:
+  mysql:
+    image: mysql:8.4
+    command: ['--character-set-server=utf8mb4', '--collation-server=utf8mb4_0900_ai_ci']
+    environment:
+      MYSQL_ROOT_PASSWORD: ${MYSQL_ROOT_PASSWORD:?copy .env.example to .env}
+      MYSQL_DATABASE: ${MYSQL_DATABASE:?copy .env.example to .env}
+      MYSQL_USER: ${MYSQL_USER:?copy .env.example to .env}
+      MYSQL_PASSWORD: ${MYSQL_PASSWORD:?copy .env.example to .env}
+    ports:
+      - '127.0.0.1:3306:3306'
+    volumes:
+      - mysql-data:/var/lib/mysql
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot -p"$$MYSQL_ROOT_PASSWORD" --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - '127.0.0.1:6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # MinIO's official images are no longer published; this is the last pullable release that
+  # includes the mc client. Local development only (docs/decisions/0006).
+  minio:
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    environment:
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?copy .env.example to .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?copy .env.example to .env}
+    ports:
+      - '127.0.0.1:9000:9000'
+      - '127.0.0.1:9001:9001'
+    volumes:
+      - minio-data:/bitnami/minio/data
+    healthcheck:
+      test: ['CMD', 'curl', '-f', 'http://localhost:9000/minio/health/live']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+      start_period: 10s
+
+  # One-shot: creates the bucket, then exits 0.
+  minio-init:
+    image: bitnamilegacy/minio:2025.7.23-debian-12-r5
+    restart: 'no'
+    depends_on:
+      minio:
+        condition: service_healthy
+    environment:
+      MC_CONFIG_DIR: /tmp/.mc
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:?copy .env.example to .env}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:?copy .env.example to .env}
+      S3_BUCKET: ${S3_BUCKET:?copy .env.example to .env}
+    entrypoint: ['/bin/sh', '-c']
+    command:
+      - >-
+        mc alias set local http://minio:9000 "$$MINIO_ROOT_USER" "$$MINIO_ROOT_PASSWORD" &&
+        mc mb --ignore-existing "local/$$S3_BUCKET"
+
+  mailpit:
+    image: axllent/mailpit:v1.31.3
+    ports:
+      - '127.0.0.1:8025:8025'
+      - '127.0.0.1:1025:1025'
+    healthcheck:
+      test: ['CMD', '/mailpit', 'readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+  # Pinned (SEC-023). Reachable only on the Compose network as http://leetcode-api:3000: no `ports:`.
+  # The published image is amd64-only; on ARM hosts it runs under emulation.
+  leetcode-api:
+    image: alfaarghya/alfa-leetcode-api:2.0.4
+    platform: linux/amd64
+    expose:
+      - '3000'
+    healthcheck:
+      # Any HTTP response below 500 means the server is listening. F-15 confirms a real endpoint (DOCKER-008).
+      test:
+        - 'CMD'
+        - 'node'
+        - '-e'
+        - "fetch('http://localhost:3000/').then((r) => process.exit(r.status < 500 ? 0 : 1), () => process.exit(1))"
+      interval: 10s
+      timeout: 5s
+      retries: 10
+      start_period: 20s
+
+  # Does not depend on leetcode-api: LeetCode being down is a handled provider outage (DOCKER-009).
+  api:
+    build:
+      context: .
+      target: dev
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      PORT: '3000'
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      REDIS_URL: redis://redis:6379
+    ports:
+      - '127.0.0.1:3000:3000'
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://localhost:3000/readyz']
+      interval: 5s
+      timeout: 3s
+      retries: 20
+      start_period: 30s
+
+  # --- profile "test": isolated, throwaway MySQL and Redis for integration tests (DOCKER-012).
+  # Start with: docker compose --profile test up -d --wait
+  mysql-test:
+    profiles: ['test']
+    image: mysql:8.4
+    command: ['--character-set-server=utf8mb4', '--collation-server=utf8mb4_0900_ai_ci']
+    environment:
+      MYSQL_ALLOW_EMPTY_PASSWORD: 'yes'
+      MYSQL_DATABASE: edumetrics_test
+    ports:
+      - '127.0.0.1:3307:3306'
+    tmpfs:
+      - /var/lib/mysql
+    healthcheck:
+      test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot --silent']
+      interval: 5s
+      timeout: 5s
+      retries: 20
+      start_period: 20s
+
+  redis-test:
+    profiles: ['test']
+    image: redis:7-alpine
+    command: ['redis-server', '--save', '', '--appendonly', 'no']
+    ports:
+      - '127.0.0.1:6380:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 5s
+      timeout: 3s
+      retries: 10
+
+volumes:
+  mysql-data:
+  minio-data:
