@@ -5,7 +5,14 @@ import tseslint from 'typescript-eslint';
 
 export default tseslint.config(
   {
-    ignores: ['**/dist/**', '**/build/**', '**/coverage/**', '**/node_modules/**', 'docs/**'],
+    ignores: [
+      '**/dist/**',
+      '**/build/**',
+      '**/coverage/**',
+      '**/node_modules/**',
+      '**/generated/**',
+      'docs/**',
+    ],
   },
   js.configs.recommended,
   ...tseslint.configs.strictTypeChecked,
@@ -16,7 +23,7 @@ export default tseslint.config(
       globals: { ...globals.node },
       parserOptions: {
         projectService: {
-          allowDefaultProject: ['*.config.mjs', '*.config.ts'],
+          allowDefaultProject: ['*.config.mjs', '*.config.ts', 'apps/api/*.config.ts'],
         },
         tsconfigRootDir: import.meta.dirname,
       },
@@ -26,6 +33,14 @@ export default tseslint.config(
       '@typescript-eslint/no-unused-vars': ['error', { argsIgnorePattern: '^_' }],
       '@typescript-eslint/restrict-template-expressions': ['error', { allowNumber: true }],
     },
+  },
+  {
+    // Test files only. Tests such as apps/api/src/architecture.test.ts read the project's own
+    // source files to check layering rules, so their fs paths are built at run time. The rule
+    // guards application code against attacker-controlled paths, which tests do not take as
+    // input. It stays on for all non-test code.
+    files: ['**/*.test.ts'],
+    rules: { 'security/detect-non-literal-fs-filename': 'off' },
   },
   {
     files: ['**/*.mjs', '**/*.config.ts'],

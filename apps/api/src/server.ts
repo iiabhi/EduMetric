@@ -2,6 +2,7 @@ import { config as loadDotenv } from 'dotenv';
 import { createApp } from './app.js';
 import { loadConfigOrExit } from './config/index.js';
 import { createLogger } from './lib/logger.js';
+import { createPrismaClient } from './lib/prisma.js';
 import { buildReadinessChecks } from './modules/health/health.checks.js';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
@@ -9,6 +10,8 @@ const SHUTDOWN_TIMEOUT_MS = 10_000;
 loadDotenv({ quiet: true });
 const config = loadConfigOrExit();
 const logger = createLogger(config);
+// Connects lazily, so the API starts even while MySQL is down. Feature modules receive it in later features.
+const prisma = createPrismaClient(config);
 const app = createApp({ config, logger, readinessChecks: buildReadinessChecks(config) });
 
 const server = app.listen(config.port, () => {
@@ -28,7 +31,14 @@ const shutdown = (signal: string) => {
   }, SHUTDOWN_TIMEOUT_MS);
   force.unref();
   server.close(() => {
-    process.exit(0);
+    prisma
+      .$disconnect()
+      .catch((err: unknown) => {
+        logger.error({ err }, 'Prisma disconnect failed');
+      })
+      .finally(() => {
+        process.exit(0);
+      });
   });
 };
 

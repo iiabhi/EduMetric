@@ -20,7 +20,14 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "build": "npm run build -w packages/shared && npm run build -w apps/api",
-    "dev": "npm run build -w packages/shared && npm run dev -w apps/api"
+    "dev": "npm run build -w packages/shared && npm run db:generate && npm run dev -w apps/api",
+    "postinstall": "npm run db:generate",
+    "db:generate": "npm run db:generate -w apps/api",
+    "db:migrate:dev": "npm run db:migrate:dev -w apps/api --",
+    "db:migrate:deploy": "npm run db:migrate:deploy -w apps/api",
+    "db:seed": "npm run db:seed -w apps/api",
+    "prisma:validate": "npm run prisma:validate -w apps/api",
+    "db:check-migrations": "bash scripts/db-check-migrations.sh"
   },
   "devDependencies": {
     "@eslint/js": "^10.0.1",
@@ -38,5 +45,10 @@
     "typescript": "~6.0.3",
     "typescript-eslint": "^8.71.0",
     "vitest": "^5.0.3"
+  },
+  "overrides": {
+    "mariadb": "3.5.4",
+    "mysql2": "3.24.5",
+    "deepmerge-ts": "8.0.0"
   }
 }

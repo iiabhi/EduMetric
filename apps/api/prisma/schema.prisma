@@ -1,0 +1,95 @@
+// Identity tables only (F-03). Later features add their own models and migrations.
+generator client {
+  provider     = "prisma-client"
+  output       = "../src/generated/prisma"
+  moduleFormat = "esm"
+}
+
+datasource db {
+  provider = "mysql"
+}
+
+enum AuthTokenType {
+  EMAIL_VERIFY
+  PASSWORD_RESET
+}
+
+model User {
+  id              String    @id @default(uuid(7)) @db.Char(36)
+  email           String    @unique @db.VarChar(254)
+  passwordHash    String?   @db.VarChar(255)
+  emailVerifiedAt DateTime? @db.DateTime(3)
+  createdAt       DateTime  @default(now()) @db.DateTime(3)
+  updatedAt       DateTime  @updatedAt @db.DateTime(3)
+
+  oauthAccounts OAuthAccount[]
+  sessions      Session[]
+  authTokens    AuthToken[]
+  profile       StudentProfile?
+}
+
+model OAuthAccount {
+  id              String   @id @default(uuid(7)) @db.Char(36)
+  userId          String   @db.Char(36)
+  provider        String   @db.VarChar(32)
+  providerSubject String   @db.VarChar(255)
+  email           String   @db.VarChar(254)
+  createdAt       DateTime @default(now()) @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@unique([provider, providerSubject])
+  @@index([userId])
+}
+
+model Session {
+  id               String    @id @default(uuid(7)) @db.Char(36)
+  userId           String    @db.Char(36)
+  familyId         String    @db.Char(36)
+  refreshTokenHash String    @unique @db.Char(64)
+  expiresAt        DateTime  @db.DateTime(3)
+  revokedAt        DateTime? @db.DateTime(3)
+  replacedById     String?   @db.Char(36)
+  userAgent        String?   @db.VarChar(512)
+  ipHash           String?   @db.Char(64)
+  createdAt        DateTime  @default(now()) @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId])
+  @@index([familyId])
+}
+
+model AuthToken {
+  id        String        @id @default(uuid(7)) @db.Char(36)
+  userId    String        @db.Char(36)
+  type      AuthTokenType
+  tokenHash String        @unique @db.Char(64)
+  expiresAt DateTime      @db.DateTime(3)
+  usedAt    DateTime?     @db.DateTime(3)
+  createdAt DateTime      @default(now()) @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+
+  @@index([userId, type])
+}
+
+model StudentProfile {
+  userId                String    @id @db.Char(36)
+  fullName              String    @db.VarChar(120)
+  universityName        String?   @db.VarChar(150)
+  degree                String?   @db.VarChar(80)
+  branch                String?   @db.VarChar(120)
+  admissionYear         Int?
+  graduationYear        Int?
+  currentSemester       Int?
+  studentIdentifier     String?   @db.VarChar(50)
+  gradingScaleMax       Decimal   @default(10.00) @db.Decimal(4, 2)
+  officialCgpa          Decimal?  @db.Decimal(4, 2)
+  totalRequiredCredits  Decimal?  @db.Decimal(5, 1)
+  onboardingCompletedAt DateTime? @db.DateTime(3)
+  createdAt             DateTime  @default(now()) @db.DateTime(3)
+  updatedAt             DateTime  @updatedAt @db.DateTime(3)
+
+  user User @relation(fields: [userId], references: [id], onDelete: Cascade)
+}

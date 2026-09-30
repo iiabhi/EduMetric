@@ -24,6 +24,8 @@ describe('loadConfig', () => {
     expect(c).toMatchObject({
       env: 'development',
       port: 3000,
+      dbPoolSize: 10,
+      dbAcquireTimeoutMs: 3000,
       logLevel: 'info',
       newsProvider: 'none',
       aiProvider: 'none',
@@ -37,6 +39,12 @@ describe('loadConfig', () => {
     expect(c.port).toBe(8080);
     expect(c.logLevel).toBe('debug');
     expect(c.env).toBe('test');
+  });
+
+  it('reads DB_POOL_SIZE and DB_ACQUIRE_TIMEOUT_MS overrides', () => {
+    const c = loadConfig({ ...valid, DB_POOL_SIZE: '25', DB_ACQUIRE_TIMEOUT_MS: '1500' });
+    expect(c.dbPoolSize).toBe(25);
+    expect(c.dbAcquireTimeoutMs).toBe(1500);
   });
 
   it('lists every missing required variable by name', () => {
@@ -63,6 +71,12 @@ describe('loadConfig', () => {
     ['PORT', '0'],
     ['PORT', '70000'],
     ['PORT', 'abc'],
+    ['DB_POOL_SIZE', '0'],
+    ['DB_POOL_SIZE', '101'],
+    ['DB_POOL_SIZE', 'many'],
+    ['DB_ACQUIRE_TIMEOUT_MS', '99'],
+    ['DB_ACQUIRE_TIMEOUT_MS', '60001'],
+    ['DB_ACQUIRE_TIMEOUT_MS', 'soon'],
     ['LOG_LEVEL', 'verbose'],
     ['NODE_ENV', 'staging'],
     ['APP_BASE_URL', 'not a url'],
