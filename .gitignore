@@ -15,3 +15,6 @@ coverage/
 
 # --- raw scanner/test output (the markdown reports in docs/audits are committed)
 docs/audits/*/raw/
+
+# macOS
+.DS_Store
