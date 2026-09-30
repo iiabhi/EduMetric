@@ -18,7 +18,7 @@ curl -i http://localhost:3000/healthz
 
 ```bash
 cp .env.example .env                 # once; the passwords in it are local-only placeholders
-docker compose up --build            # api, mysql, redis, minio (+ bucket), mailpit, leetcode-api
+docker compose up --build            # api, worker, mysql, redis, minio (+ bucket), mailpit, leetcode-api
 curl -i http://localhost:3000/readyz # 200 when MySQL and Redis are reachable, 503 if not
 ```
 
@@ -34,9 +34,22 @@ curl -i http://localhost:3000/readyz # 200 when MySQL and Redis are reachable, 5
 - After changing dependencies run `docker compose up --build -V`. After changing a password in `.env` run `docker compose down -v` (this deletes local data).
 - Isolated databases for integration tests: `docker compose --profile test up -d --wait` (MySQL on 3307, Redis on 6380, no passwords).
 - `bash scripts/compose-smoke.sh` runs the F-02 acceptance checks against a clean stack.
-- The `worker` and `web` services are added by F-04 and F-06.
+- The `web` service is added by F-06. The `worker` service (F-04) waits for the api to be healthy.
 - A one-shot `migrate` service applies the committed database migrations before the api starts (it exits 0 when done).
 - MySQL's init script (dev-only shadow-database grant for `prisma migrate dev`) runs only when the `mysql-data` volume is first created. If you had a stack before F-03, run `docker compose down -v` once (this deletes local data).
+
+### Queue and worker (F-04)
+
+Jobs are BullMQ jobs on Redis. The API side enqueues (`src/jobs/jobQueue.ts`); the `worker` service runs `src/worker.ts` and processes them. There is no HTTP endpoint to enqueue. To try it:
+
+```bash
+docker compose exec api npx tsx apps/api/src/cli/enqueueNoop.ts      # enqueue one no-op job; prints its jobId
+docker compose exec api npx tsx apps/api/src/cli/enqueueNoop.ts 4000 # a job that takes 4 s
+docker compose logs worker                                             # "Job started" / "Job completed" with the jobId
+docker compose stop worker                                             # SIGTERM: finishes the in-flight job first (up to 30 s)
+```
+
+To add a job: add its queue (if new) to `QUEUE_NAMES` in `src/config/env.ts`, define it with `defineJob` (queue, name, Zod payload schema), write a handler with `defineHandler`, and add the handler to `src/jobs/processors/index.ts`. Handlers must be idempotent, payloads hold IDs only, and job IDs for deduplication must not contain `:` (use `news-summary-<articleId>`).
 
 ### Database (Prisma)
 
@@ -61,6 +74,7 @@ Never edit a migration that has been applied; add a new one. Integration tests u
 | `npm run test:integration`           | Integration tests (real MySQL test database)  |
 | `npm run format:check`               | Prettier check                                |
 | `npm run build`                      | Build all workspaces                          |
+| `npm run dev:worker -w apps/api`     | Run the BullMQ worker with reload (F-04)      |
 | `npm run prisma:validate`            | Validate `schema.prisma`                      |
 | `npm run db:check-migrations`        | Fail if schema and migrations are out of sync |
 | `bash scripts/verify.sh F-01`        | Testing gate                                  |

@@ -22,11 +22,15 @@ export const REDACT_PATHS: string[] = [
   ...SECRET_FIELDS.flatMap((field) => [field, `*.${field}`, `*.*.${field}`]),
 ];
 
-export const createLogger = (config: Config, destination?: DestinationStream): Logger =>
+export const createLogger = (
+  config: Config,
+  destination?: DestinationStream,
+  service = 'edumetrics-api',
+): Logger =>
   pino(
     {
       level: config.logLevel,
-      base: { service: 'edumetrics-api' },
+      base: { service },
       timestamp: pino.stdTimeFunctions.isoTime,
       redact: { paths: REDACT_PATHS, censor: '[REDACTED]' },
     },

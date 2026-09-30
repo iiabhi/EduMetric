@@ -1,47 +1,43 @@
-import net from 'node:net';
-import { afterEach, describe, expect, it } from 'vitest';
-import { testConfig } from '../../test-utils/config.js';
+import { describe, expect, it } from 'vitest';
 import { buildReadinessChecks } from './health.checks.js';
 
-describe('buildReadinessChecks (real probes)', () => {
-  let server: net.Server | undefined;
-  afterEach(() => {
-    server?.close();
-    server = undefined;
+const up = { ping: () => Promise.resolve() };
+const redisUp = { ping: () => Promise.resolve('PONG' as const) };
+const down = { ping: () => Promise.reject(new Error('connection refused')) };
+
+const run = async (checks: ReturnType<typeof buildReadinessChecks>) =>
+  await Promise.all(
+    checks.map(async (c) => ({ name: c.name, ok: await c.check().catch(() => false) })),
+  );
+
+describe('buildReadinessChecks', () => {
+  it('has a mysql and a redis check', () => {
+    expect(buildReadinessChecks({ health: up, redis: redisUp }).map((c) => c.name)).toEqual([
+      'mysql',
+      'redis',
+    ]);
   });
 
-  const listen = (): Promise<number> =>
-    new Promise((resolve) => {
-      server = net.createServer((s) => {
-        s.on('error', () => undefined);
-      });
-      server.listen(0, '127.0.0.1', () => {
-        resolve((server?.address() as net.AddressInfo).port);
-      });
-    });
-
-  it('passes when both configured ports accept connections', async () => {
-    const port = await listen();
-    const checks = buildReadinessChecks(
-      testConfig({
-        DATABASE_URL: `mysql://u:p@127.0.0.1:${port}/db`,
-        REDIS_URL: `redis://127.0.0.1:${port}`,
-      }),
-    );
-    expect(await Promise.all(checks.map((c) => c.check()))).toEqual([true, true]);
+  it('passes when SELECT 1 and PING both answer', async () => {
+    expect(await run(buildReadinessChecks({ health: up, redis: redisUp }))).toEqual([
+      { name: 'mysql', ok: true },
+      { name: 'redis', ok: true },
+    ]);
   });
 
-  it('fails the check whose port is closed', async () => {
-    const port = await listen();
-    const closed = await listen();
-    server?.close();
-    const checks = buildReadinessChecks(
-      testConfig({
-        DATABASE_URL: `mysql://u:p@127.0.0.1:${closed}/db`,
-        REDIS_URL: `redis://127.0.0.1:${port}`,
-      }),
-    );
-    const results = await Promise.all(checks.map((c) => c.check()));
-    expect(results[0]).toBe(false);
+  it('fails only the mysql check when the database query fails', async () => {
+    expect(await run(buildReadinessChecks({ health: down, redis: redisUp }))).toEqual([
+      { name: 'mysql', ok: false },
+      { name: 'redis', ok: true },
+    ]);
+  });
+
+  it('fails only the redis check when PING fails or answers something else', async () => {
+    expect(await run(buildReadinessChecks({ health: up, redis: down }))).toEqual([
+      { name: 'mysql', ok: true },
+      { name: 'redis', ok: false },
+    ]);
+    const odd = { ping: () => Promise.resolve('nope' as never) };
+    expect((await run(buildReadinessChecks({ health: up, redis: odd })))[1]?.ok).toBe(false);
   });
 });

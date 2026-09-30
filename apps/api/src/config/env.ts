@@ -3,6 +3,19 @@ import { z } from 'zod';
 const NODE_ENVS = ['development', 'test', 'production'] as const;
 const LOG_LEVELS = ['fatal', 'error', 'warn', 'info', 'debug', 'trace', 'silent'] as const;
 
+/** Queue names (SRD JOB-011). Each has a QUEUE_CONCURRENCY_<NAME> setting (JOB-012). */
+export const QUEUE_NAMES = [
+  'email',
+  'coding-refresh',
+  'news-ingest',
+  'news-summary',
+  'prep-plan',
+  'pdf-render',
+  'maintenance',
+] as const;
+
+export type QueueName = (typeof QUEUE_NAMES)[number];
+
 export type NodeEnv = (typeof NODE_ENVS)[number];
 
 export interface Config {
@@ -16,6 +29,7 @@ export interface Config {
   dbPoolSize: number;
   dbAcquireTimeoutMs: number;
   redisUrl: string;
+  queueConcurrency: Record<QueueName, number>;
   newsProvider: 'none' | 'mock';
   aiProvider: 'none' | 'mock';
   videoSearchProvider: 'none';
@@ -88,7 +102,16 @@ const boundedInt = (min: number, max: number, fallback: number) => {
     .default(fallback);
 };
 
+/** QUEUE_CONCURRENCY_CODING_REFRESH for 'coding-refresh', and so on. */
+export const concurrencyVariable = (queue: QueueName): string =>
+  `QUEUE_CONCURRENCY_${queue.toUpperCase().replaceAll('-', '_')}`;
+
+const concurrencyShape = Object.fromEntries(
+  QUEUE_NAMES.map((queue) => [concurrencyVariable(queue), boundedInt(1, 50, 2)]),
+);
+
 const envSchema = z.object({
+  ...concurrencyShape,
   NODE_ENV: z
     .enum(NODE_ENVS, { error: `must be one of ${NODE_ENVS.join(', ')}` })
     .default('development'),
@@ -111,6 +134,9 @@ const envSchema = z.object({
   AI_PROVIDER: z.enum(['none', 'mock'], { error: 'must be one of none, mock' }).default('none'),
   VIDEO_SEARCH_PROVIDER: z.enum(['none'], { error: 'must be none' }).default('none'),
 });
+
+const parsedConcurrency = (values: Record<string, unknown>, queue: QueueName): unknown =>
+  new Map(Object.entries(values)).get(concurrencyVariable(queue));
 
 /**
  * Validate the environment and return typed config (SRD 22.1). Empty strings count as unset.
@@ -159,6 +185,9 @@ export const loadConfig = (env: Record<string, string | undefined>): Config => {
     dbPoolSize: v.DB_POOL_SIZE,
     dbAcquireTimeoutMs: v.DB_ACQUIRE_TIMEOUT_MS,
     redisUrl: v.REDIS_URL,
+    queueConcurrency: Object.fromEntries(
+      QUEUE_NAMES.map((queue) => [queue, Number(parsedConcurrency(v, queue))]),
+    ) as Record<QueueName, number>,
     newsProvider: v.NEWS_PROVIDER,
     aiProvider: v.AI_PROVIDER,
     videoSearchProvider: v.VIDEO_SEARCH_PROVIDER,

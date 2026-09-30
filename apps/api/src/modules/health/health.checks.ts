@@ -1,20 +1,30 @@
-import type { Config } from '../../config/env.js';
-import { parseHostPort, probeTcp } from '../../lib/tcpProbe.js';
+import type { RedisClient } from '../../lib/redis.js';
+import type { HealthRepository } from './health.repository.js';
 import type { ReadinessCheck } from './health.service.js';
 
-const PROBE_TIMEOUT_MS = 1000;
-const MYSQL_DEFAULT_PORT = 3306;
-const REDIS_DEFAULT_PORT = 6379;
+export interface ReadinessDeps {
+  health: Pick<HealthRepository, 'ping'>;
+  redis: Pick<RedisClient, 'ping'>;
+}
 
 /**
- * MySQL and Redis reachability (ADR 0005). A fresh TCP connection per call, so a restarted
- * dependency is picked up with no reconnect logic. F-03/F-04 can swap in SELECT 1 / PING.
+ * MySQL answers `SELECT 1` and Redis answers `PING` (ADR 0009, replaces the TCP probe of ADR 0005).
+ * Prisma's pool and ioredis reconnect by themselves, so nothing restarts after a dependency restarts.
+ * The readiness service supplies the timeout.
  */
-export const buildReadinessChecks = (config: Config): ReadinessCheck[] => {
-  const mysql = parseHostPort(config.databaseUrl, MYSQL_DEFAULT_PORT);
-  const redis = parseHostPort(config.redisUrl, REDIS_DEFAULT_PORT);
-  return [
-    { name: 'mysql', check: () => probeTcp(mysql.host, mysql.port, PROBE_TIMEOUT_MS) },
-    { name: 'redis', check: () => probeTcp(redis.host, redis.port, PROBE_TIMEOUT_MS) },
-  ];
-};
+export const buildReadinessChecks = ({ health, redis }: ReadinessDeps): ReadinessCheck[] => [
+  {
+    name: 'mysql',
+    check: async () => {
+      await health.ping();
+      return true;
+    },
+  },
+  {
+    name: 'redis',
+    check: async () => {
+      const reply: string = await redis.ping();
+      return reply === 'PONG';
+    },
+  },
+];

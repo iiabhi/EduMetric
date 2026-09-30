@@ -1,6 +1,6 @@
 # Local development stack (F-02). Copy .env.example to .env first: passwords come from .env,
 # this file contains no credentials (DOCKER-003).
-# worker (F-04) and web (F-06) are added by those features (docs/decisions/0006).
+# web (F-06) is added by that feature (docs/decisions/0006). worker was added by F-04.
 # `migrate` (F-03) applies database migrations before the api starts.
 name: edumetrics
 
@@ -152,6 +152,37 @@ services:
       timeout: 3s
       retries: 20
       start_period: 30s
+
+  # BullMQ worker (F-04): same image and code as the api, different command (DOCKER-007).
+  # It waits for the api to be healthy on purpose: the api container builds packages/shared and the
+  # Prisma client into the shared bind mount, and two containers must not build into it at once.
+  # stop_grace_period is longer than the worker's 30 s job drain (JOB-014); Compose's default is 10 s.
+  worker:
+    build:
+      context: .
+      target: dev
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+      REDIS_URL: redis://redis:6379
+    command: ['npm', 'run', 'dev:worker', '-w', 'apps/api']
+    stop_grace_period: 35s
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      redis:
+        condition: service_healthy
+      api:
+        condition: service_healthy
+    healthcheck:
+      # Process check only: the worker has no HTTP port.
+      test: ['CMD-SHELL', 'pgrep -f "src/worker.ts" > /dev/null']
+      interval: 10s
+      timeout: 3s
+      retries: 5
+      start_period: 20s
 
   # --- profile "test": isolated, throwaway MySQL and Redis for integration tests (DOCKER-012).
   # Start with: docker compose --profile test up -d --wait

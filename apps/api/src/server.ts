@@ -2,15 +2,23 @@ import { createApp } from './app.js';
 import { loadConfigOrExit } from './config/index.js';
 import { createLogger } from './lib/logger.js';
 import { createPrismaClient } from './lib/prisma.js';
+import { createRedisClient } from './lib/redis.js';
 import { buildReadinessChecks } from './modules/health/health.checks.js';
+import { createHealthRepository } from './modules/health/health.repository.js';
 
-const SHUTDOWN_TIMEOUT_MS = 10_000;
+const SHUTDOWN_TIMEOUT_MS = 15_000; // REL-009
 
 const config = loadConfigOrExit();
 const logger = createLogger(config);
-// Connects lazily, so the API starts even while MySQL is down. Feature modules receive it in later features.
+// Both connect in the background, so the API starts even while MySQL or Redis is down.
+// Feature modules receive them in later features.
 const prisma = createPrismaClient(config);
-const app = createApp({ config, logger, readinessChecks: buildReadinessChecks(config) });
+const redis = createRedisClient(config, logger, 'api');
+const app = createApp({
+  config,
+  logger,
+  readinessChecks: buildReadinessChecks({ health: createHealthRepository(prisma), redis }),
+});
 
 const server = app.listen(config.port, () => {
   logger.info({ port: config.port, env: config.env }, 'API listening');
@@ -29,14 +37,14 @@ const shutdown = (signal: string) => {
   }, SHUTDOWN_TIMEOUT_MS);
   force.unref();
   server.close(() => {
-    prisma
-      .$disconnect()
-      .catch((err: unknown) => {
-        logger.error({ err }, 'Prisma disconnect failed');
-      })
-      .finally(() => {
-        process.exit(0);
-      });
+    void Promise.allSettled([prisma.$disconnect(), redis.quit()]).then((results) => {
+      for (const result of results) {
+        if (result.status === 'rejected') {
+          logger.error({ err: result.reason }, 'Closing a connection failed');
+        }
+      }
+      process.exit(0);
+    });
   });
 };
 

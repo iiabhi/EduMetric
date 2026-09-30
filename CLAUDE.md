@@ -10,6 +10,7 @@
 - Work only on the feature named in the prompt.
 - News, AI and video search: build only interfaces plus none/mock implementations. Real providers are future scope.
 - Do not add tables, endpoints or dependencies the current feature doesn't need.
+- This is a college project: always choose the simplest solution that meets the SRD. Don't add extra services, libraries or infrastructure unless a requirement needs it. When there are two options, propose the simpler one first.
 - If the SRD is ambiguous or wrong, choose the safer option, write an ADR in docs/decisions/NNNN-title.md, and mention it in your summary.
 
 ## Engineering rules
@@ -37,6 +38,7 @@ The automated gates in scripts/verify.sh call them by name:
 - Security gate: `bash scripts/security-scan.sh <feature-id>`
 - Dev stack: `cp .env.example .env` once, then `docker compose up` (API on :3000 with `GET /readyz`; Mailpit UI :8025, MinIO console :9001). Test databases: `docker compose --profile test up -d --wait`. Stack acceptance check: `bash scripts/compose-smoke.sh`
 - Dev server: `npm run dev` (API on PORT from .env; `GET /healthz`, OpenAPI JSON at `/api/docs` outside production)
+- Worker (F-04): `npm run dev:worker -w apps/api` (Compose runs it as the `worker` service); enqueue a test job with `docker compose exec api npx tsx apps/api/src/cli/enqueueNoop.ts [delayMs]`
 - Unit tests: `npm test`; unit tests with coverage: `npm run test:coverage`; integration: `npm run test:integration`
 - Unit tests are `*.test.ts` (Supertest against `createApp` counts as unit); `*.int.test.ts` is for tests that need real infrastructure or a spawned process (ADR 0004)
 - Database (F-03): migrations are committed and applied by the `migrate` compose service; create one with `docker compose run --rm api npm run db:migrate:dev -- --name <name>`; seed with `npm run db:seed`; after editing `schema.prisma` run `npm run db:generate`. Integration tests only run against a database named `*_test` (compose test profile).

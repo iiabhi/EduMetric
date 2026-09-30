@@ -1,7 +1,9 @@
 #!/usr/bin/env bash
 # Manual acceptance check for F-02 (Docker Compose dev stack) and F-03 (migrations and seed). Needs Docker and a .env file.
 # Not part of scripts/verify.sh: CI has no Compose stack. Leaves the stack running when done.
-# Usage: cp .env.example .env && bash scripts/compose-smoke.sh
+# WARNING: starts with `docker compose down -v`, which deletes the local dev data (MySQL, MinIO, Redis).
+# In a terminal it asks first; pass --yes to skip the question. Without a terminal (CI) it just runs.
+# Usage: cp .env.example .env && bash scripts/compose-smoke.sh [--yes]
 set -euo pipefail
 cd "$(dirname "$0")/.."
 
@@ -28,6 +30,11 @@ wait_for_status() { # wait_for_status <expected> <seconds>
 }
 
 [ -f .env ] || { echo "Missing .env. Run: cp .env.example .env"; exit 1; }
+
+if [ "${1:-}" != "--yes" ] && [ -t 0 ]; then
+  read -r -p "This deletes all local dev data (MySQL, MinIO, Redis volumes). Continue? [y/N] " answer
+  case "$answer" in [yY]*) ;; *) echo "Aborted."; exit 1 ;; esac
+fi
 
 echo "== Static checks on the resolved compose config =="
 CONFIG_JSON="$(mktemp)"
@@ -62,6 +69,12 @@ expect(api.depends_on?.migrate?.condition === 'service_completed_successfully', 
 expect(services.migrate.depends_on?.mysql?.condition === 'service_healthy', 'migrate: must wait for mysql');
 expect(!(services.migrate.ports?.length), 'migrate: must not publish ports');
 
+const worker = services.worker;
+expect(worker.depends_on?.redis?.condition === 'service_healthy', 'worker: must wait for redis');
+expect(worker.depends_on?.api?.condition === 'service_healthy', 'worker: must wait for api (shared bind-mount build)');
+expect(!(worker.ports?.length), 'worker: must not publish ports');
+expect(parseInt(String(worker.stop_grace_period), 10) > 30, 'worker: stop_grace_period must exceed the 30 s job drain (JOB-014)');
+
 for (const [name, svc] of Object.entries(services)) {
   if (name.endsWith('-test')) expect((svc.profiles ?? []).includes('test'), `${name}: must be in the test profile`);
 }
@@ -79,7 +92,7 @@ docker compose up -d --build >/tmp/compose-up.log 2>&1 || { fail "docker compose
 
 all_healthy() {
   local service
-  for service in mysql redis minio mailpit leetcode-api api; do
+  for service in mysql redis minio mailpit leetcode-api api worker; do
     [ "$(docker inspect --format '{{.State.Health.Status}}' "$(docker compose ps -q "$service")" 2>/dev/null)" = "healthy" ] || return 1
   done
 }
@@ -88,7 +101,7 @@ until all_healthy || [ "$SECONDS" -ge "$deadline" ]; do sleep 2; done
 all_healthy && pass "docker compose up: all services became healthy" || fail "services did not become healthy within 240s"
 
 echo "== Service state =="
-for service in mysql redis minio mailpit leetcode-api api; do
+for service in mysql redis minio mailpit leetcode-api api worker; do
   health="$(docker inspect --format '{{.State.Health.Status}}' "$(docker compose ps -q "$service")" 2>/dev/null || echo missing)"
   [ "$health" = "healthy" ] && pass "$service is healthy" || fail "$service is $health"
 done
@@ -139,6 +152,26 @@ wait_for_status 200 60 && pass "/readyz recovers after redis restarts" || fail "
 echo "== leetcode-api reachable from the api container =="
 code="$(docker compose exec -T api node -e "fetch('http://leetcode-api:3000/').then((r) => console.log(r.status), () => console.log('error'))" 2>/dev/null || echo error)"
 [ "$code" != "error" ] && [ "$code" -lt 500 ] 2>/dev/null && pass "http://leetcode-api:3000 responds ($code)" || fail "http://leetcode-api:3000 did not respond"
+
+echo "== Queue and worker (F-04) =="
+job_id_of() { sed -n 's/.*"jobId":"\([^"]*\)".*/\1/p' | head -1; }
+worker_log_has() { docker compose logs --no-color worker 2>/dev/null | grep "\"jobId\":\"$1\"" | grep -q "$2"; }
+wait_for_worker_log() { # wait_for_worker_log <jobId> <text> <seconds>
+  local deadline=$((SECONDS + $3))
+  while [ "$SECONDS" -lt "$deadline" ]; do worker_log_has "$1" "$2" && return 0; sleep 1; done
+  return 1
+}
+job_id="$(docker compose exec -T api npx tsx apps/api/src/cli/enqueueNoop.ts 2>/dev/null | job_id_of)"
+[ -n "$job_id" ] && pass "api container enqueued job $job_id" || fail "enqueueNoop did not report a job ID"
+wait_for_worker_log "$job_id" "Job completed" 30 && pass "worker container processed the job" || fail "worker did not complete job $job_id"
+
+slow_id="$(docker compose exec -T api npx tsx apps/api/src/cli/enqueueNoop.ts 4000 2>/dev/null | job_id_of)"
+wait_for_worker_log "$slow_id" "Job started" 30 && pass "slow job started" || fail "slow job did not start"
+docker compose stop worker >/dev/null 2>&1
+worker_log_has "$slow_id" "Job completed" && pass "SIGTERM: worker finished the in-flight job before exiting" || fail "worker exited before finishing the in-flight job"
+worker_exit="$(docker inspect --format '{{.State.ExitCode}}' "$(docker compose ps -a -q worker)" 2>/dev/null || echo missing)"
+[ "$worker_exit" = "0" ] && pass "worker exited 0 after SIGTERM" || fail "worker exit code: $worker_exit"
+docker compose start worker >/dev/null 2>&1
 
 echo "== Test profile =="
 if docker compose --profile test up -d --wait mysql-test redis-test >/tmp/compose-test-up.log 2>&1; then
