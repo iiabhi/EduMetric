@@ -1,8 +1,8 @@
 #!/usr/bin/env bash
 # Claude Code Stop hook: enforces the end-of-feature testing + security gate.
 #
-# While .claude/state/current-feature exists (written by /build-feature), Claude
-# cannot end its turn until, for that feature:
+# While .claude/state/finish-running exists (written by /finish-feature, which only runs
+# after the user says yes), Claude cannot end its turn until, for that feature:
 #   - docs/audits/<F>/test-report.md exists
 #   - docs/audits/<F>/verify.md and docs/audits/<F>/security-report.md exist
 #     and are newer than every source file (so the gates ran on the final code)
@@ -18,6 +18,8 @@ STATE="$DIR/.claude/state"
 MARKER="$STATE/current-feature"
 COUNTER="$STATE/stop-blocks"
 
+# Between stages of /build-feature nothing is enforced, so Claude can stop for the user's review.
+[ -f "$STATE/finish-running" ] || exit 0
 [ -f "$MARKER" ] || exit 0
 FEATURE="$(tr -d '[:space:]' <"$MARKER")"
 [ -n "$FEATURE" ] || exit 0

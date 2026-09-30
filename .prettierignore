@@ -1,0 +1,17 @@
+node_modules/
+dist/
+build/
+coverage/
+package-lock.json
+docs/audits/
+.claude/state/
+
+# Project-kit files (owned by the kit, not reformatted by Prettier)
+.claude/
+.github/
+.semgrep/
+CLAUDE.md
+README-KIT.md
+docs/SRD.md
+docs/PROGRESS.md
+scripts/
