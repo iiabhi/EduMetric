@@ -10,6 +10,7 @@
 - Work only on the feature named in the prompt.
 - News, AI and video search: build only interfaces plus none/mock implementations. Real providers are future scope.
 - Do not add tables, endpoints or dependencies the current feature doesn't need.
+- This is a college project: always choose the simplest solution that meets the SRD. Don't add extra services, libraries or infrastructure unless a requirement needs it. When there are two options, propose the simpler one first.
 - If the SRD is ambiguous or wrong, choose the safer option, write an ADR in docs/decisions/NNNN-title.md, and mention it in your summary.
 
 ## Engineering rules

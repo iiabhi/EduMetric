@@ -144,3 +144,29 @@ describe('loadConfig', () => {
     });
   });
 });
+
+describe('queue concurrency (JOB-012)', () => {
+  it('defaults to 2 for all seven queues', () => {
+    expect(loadConfig(valid).queueConcurrency).toEqual({
+      email: 2,
+      'coding-refresh': 2,
+      'news-ingest': 2,
+      'news-summary': 2,
+      'prep-plan': 2,
+      'pdf-render': 2,
+      maintenance: 2,
+    });
+  });
+
+  it('reads QUEUE_CONCURRENCY_<QUEUE> overrides', () => {
+    const c = loadConfig({ ...valid, QUEUE_CONCURRENCY_CODING_REFRESH: '5' });
+    expect(c.queueConcurrency['coding-refresh']).toBe(5);
+    expect(c.queueConcurrency.email).toBe(2);
+  });
+
+  it.each(['0', '51', 'abc', '1.5'])('rejects %s and names the variable, not the value', (bad) => {
+    const error = errorOf({ ...valid, QUEUE_CONCURRENCY_EMAIL: bad });
+    expect(error.issues.map((i) => i.variable)).toContain('QUEUE_CONCURRENCY_EMAIL');
+    expect(error.message).not.toContain(`: ${bad}`);
+  });
+});
