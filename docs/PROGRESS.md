@@ -4,7 +4,7 @@ Tests and Security show the verdicts from docs/audits/<feature>/ (PASS / FAIL / 
 
 | Feature | Status | Tests | Security | Notes |
 |---|---|---|---|---|
-| F-01 Repo scaffold | Not started | - | - | |
+| F-01 Repo scaffold | Done | PASS | PASS | 3 Low security items open, see below |
 | F-02 Docker Compose | Not started | - | - | |
 | F-03 Database foundation | Not started | - | - | |
 | F-04 Queue and worker | Not started | - | - | |
@@ -29,8 +29,15 @@ Tests and Security show the verdicts from docs/audits/<feature>/ (PASS / FAIL / 
 | F-23 Production readiness | Not started | - | - | |
 
 ## Decisions (ADRs)
+- 0001 Environment schema scope in F-01
+- 0002 `/healthz` path and semantics
+- 0003 `/api/docs` serves OpenAPI JSON only
+- 0004 Unit vs integration test layout
 
 ## Known gaps / follow-ups
+- F-01: SEC-F-01-02 `validate()` drops object-level refinements (fix before a feature needs cross-field rules)
+- F-01: SEC-F-01-03 add `TRUST_PROXY` (hop count) when rate limiting lands (SEC-016)
+- F-01: SEC-F-01-04 extend logger redaction names (`idToken`, `codeVerifier`, `apiKey`, `secret`) with the auth/OAuth features
 
 ## Security items needing my decision
 

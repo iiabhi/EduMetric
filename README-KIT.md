@@ -11,7 +11,7 @@ The same gates also run on every `git push` and in GitHub CI, so nothing gets pa
 
 | When | What runs | Can it block? |
 |---|---|---|
-| End of `/build-feature F-XX` | `finish-feature` skill: testing gate, test-engineer agent, security gate, security-auditor agent; Claude fixes findings and re-runs (max 2 rounds each) | Yes: a Stop hook keeps Claude working until the reports exist and are newer than the code (gives up after 3 tries and tells you) |
+| After you say "yes" to a finished `/build-feature F-XX` (or run `/finish-feature F-XX`) | `finish-feature` skill: testing gate, test-engineer agent, security gate, security-auditor agent; Claude fixes findings and re-runs (max 2 rounds each) | Yes, while finish-feature runs: a Stop hook keeps Claude working until the reports exist and are newer than the code (gives up after 3 tries and tells you) |
 | `git push` | `.githooks/pre-push`: testing gate + security gate | Yes: push is refused on FAIL |
 | Pull request / push to main | `.github/workflows/quality-gate.yml`: same two gates | Yes, once you mark the check as required in branch protection |
 | Any time | `/finish-feature F-XX`, or the scripts directly | - |
@@ -93,8 +93,8 @@ docs/PROGRESS.md                       progress tracker with Tests/Security colu
 .claude/settings.json                  Stop hook + permission allow/deny list
 .claude/hooks/require-feature-gate.sh  blocks ending a feature until both gates ran on the final code
 .claude/skills/plan-feature/           /plan-feature  (now includes test plan + threat review)
-.claude/skills/build-feature/          /build-feature (ends by invoking finish-feature)
-.claude/skills/finish-feature/         /finish-feature: orchestrates both gates and fixes
+.claude/skills/build-feature/          /build-feature (stops after each stage; you commit, then it continues)
+.claude/skills/finish-feature/         /finish-feature: runs only when you say yes; orchestrates both gates and fixes
 .claude/agents/test-engineer.md        independent tester (may only edit test files)
 .claude/agents/security-auditor.md     independent auditor (read-only except its report)
 scripts/verify.sh                      testing gate

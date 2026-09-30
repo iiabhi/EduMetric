@@ -36,12 +36,17 @@ The automated gates in scripts/verify.sh call them by name:
 - Testing gate: `bash scripts/verify.sh <feature-id>`
 - Security gate: `bash scripts/security-scan.sh <feature-id>`
 - Dev stack: `docker compose up`
-(add more after F-01)
+- Dev server: `npm run dev` (API on PORT from .env; `GET /healthz`, OpenAPI JSON at `/api/docs` outside production)
+- Unit tests: `npm test`; unit tests with coverage: `npm run test:coverage`; integration: `npm run test:integration`
+- Unit tests are `*.test.ts` (Supertest against `createApp` counts as unit); `*.int.test.ts` is for tests that need real infrastructure or a spawned process (ADR 0004)
+- Docs: ADRs in docs/decisions/, plans in docs/plans/
 
 ## Feature completion gate (automatic)
-- /build-feature marks the feature in progress and ends by invoking the finish-feature skill.
+- /build-feature works one stage at a time. After each stage it runs `bash scripts/verify.sh <feature-id>`, then stops so the user can review and commit. It continues only when told.
+- After the last stage it stops again for the user's own review. Never run finish-feature until the user says "yes" (or asks for /finish-feature).
 - finish-feature runs: the testing gate, the `test-engineer` agent, then the `security-auditor` agent, fixing application code between rounds.
-- A Stop hook will not let the session end while the feature's reports in docs/audits/<feature-id>/ are missing or older than the code.
+- While finish-feature is running, a Stop hook will not let the session end until the feature's reports in docs/audits/<feature-id>/ exist and are newer than the code.
+- Never commit or push; the user does that.
 - Never delete, skip or weaken a test to pass a gate. Never add nosemgrep comments, scanner ignores or audit exceptions; report them for the user to decide.
 
 ## Finishing a feature
