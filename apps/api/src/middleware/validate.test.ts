@@ -53,6 +53,15 @@ describe('validate middleware', () => {
     expect(err.details?.map((d) => d.path).sort()).toEqual(['id', 'limit']);
   });
 
+  it('keeps refine() rules on the schema (cross-field checks)', () => {
+    const matching = z
+      .object({ a: z.string(), b: z.string() })
+      .refine((v) => v.a === v.b, { message: 'must match', path: ['b'] });
+    const { next } = run({ body: matching }, { body: { a: 'x', b: 'y' } });
+    const err = next.mock.calls[0]?.[0] as ValidationError;
+    expect(err.details).toEqual([{ path: 'b', message: 'must match' }]);
+  });
+
   it('rejects a missing body', () => {
     const { next } = run({ body }, { body: undefined });
     expect(next.mock.calls[0]?.[0]).toBeInstanceOf(ValidationError);

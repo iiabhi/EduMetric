@@ -1,6 +1,6 @@
 import type { Response } from 'express';
 import { describe, expect, it, vi } from 'vitest';
-import { sendPaginated, sendSuccess } from './response.js';
+import { sendCreated, sendPaginated, sendSuccess } from './response.js';
 
 const fakeRes = () => {
   const json = vi.fn();
@@ -27,6 +27,13 @@ describe('response helpers (CONV-002)', () => {
       data: { id: 1 },
       meta: { extra: true },
     });
+  });
+
+  it('sendCreated answers 201 with the envelope', () => {
+    const { res, status, json } = fakeRes();
+    sendCreated(res, { id: 1 });
+    expect(status).toHaveBeenCalledWith(201);
+    expect(json).toHaveBeenCalledWith({ success: true, data: { id: 1 } });
   });
 
   it('sendPaginated puts pagination under meta', () => {

@@ -12,6 +12,11 @@ export const sendSuccess = (
     .json(meta === undefined ? { success: true, data } : { success: true, data, meta });
 };
 
+/** 201 Created with the standard envelope. */
+export const sendCreated = (res: Response, data: unknown): void => {
+  sendSuccess(res, data, undefined, 201);
+};
+
 export const sendPaginated = (
   res: Response,
   items: unknown[],

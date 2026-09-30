@@ -1,4 +1,4 @@
-import express, { type Express } from 'express';
+import express, { Router, type Express } from 'express';
 import type { Config } from './config/env.js';
 import type { Logger } from './lib/logger.js';
 import { buildOpenApiDocument } from './lib/openapi.js';
@@ -11,14 +11,18 @@ import type { ReadinessCheck } from './modules/health/health.service.js';
 import { createHealthRouter } from './modules/health/health.routes.js';
 
 export const JSON_BODY_LIMIT = '100kb';
+export const API_BASE_PATH = '/api/v1';
 
 export interface AppDeps {
   config: Config;
   logger: Logger;
   /** Dependencies probed by GET /readyz. Empty means always ready. */
   readinessChecks?: ReadinessCheck[];
-  /** Mount extra routers after the body parser and before the 404 handler. Used by feature modules and tests. */
-  mountRoutes?: (app: Express) => void;
+  /**
+   * Mount feature routes after the body parser and before the 404 handler. Feature modules add
+   * their routers to `api`, which is served under /api/v1 (CONV-001). `app` is for root-level routes.
+   */
+  mountRoutes?: (app: Express, api: Router) => void;
 }
 
 /** Express app factory. Does not listen, so it can be tested with Supertest. */
@@ -49,7 +53,9 @@ export const createApp = ({
     });
   }
 
-  mountRoutes?.(app);
+  const api = Router();
+  app.use(API_BASE_PATH, api);
+  mountRoutes?.(app, api);
 
   app.use(notFound);
   app.use(createErrorHandler(logger));

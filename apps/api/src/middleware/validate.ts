@@ -1,5 +1,5 @@
 import type { RequestHandler } from 'express';
-import { z } from 'zod';
+import type { z } from 'zod';
 import { ValidationError } from '../lib/errors.js';
 
 type Shape = z.ZodObject;
@@ -13,14 +13,14 @@ interface ValidateSchemas {
 const MAX_MESSAGE_LENGTH = 200;
 
 /**
- * Validate body, query and params with Zod (CONV-007). Every schema is made strict, so unknown
- * keys are rejected. Parsed values are stored on `req.validated`; `req.query` is read-only in Express 5.
+ * Validate body, query and params with Zod (CONV-007). Every schema is made strict with `.strict()`,
+ * which keeps any `.refine()` rules on the schema, so unknown keys are rejected. Parsed values are stored on `req.validated`; `req.query` is read-only in Express 5.
  */
 export const validate = (schemas: ValidateSchemas): RequestHandler => {
   const strict = {
-    body: schemas.body && z.strictObject(schemas.body.shape),
-    query: schemas.query && z.strictObject(schemas.query.shape),
-    params: schemas.params && z.strictObject(schemas.params.shape),
+    body: schemas.body?.strict(),
+    query: schemas.query?.strict(),
+    params: schemas.params?.strict(),
   };
 
   return (req, _res, next) => {

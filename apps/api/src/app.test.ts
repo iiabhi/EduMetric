@@ -35,7 +35,10 @@ const build = (overrides: Record<string, string> = {}) => {
   const app = createApp({
     config,
     logger: createLogger(config, logs),
-    mountRoutes: (a: Express) => {
+    mountRoutes: (a: Express, api) => {
+      api.get('/test/ping', (_req, res) => {
+        sendSuccess(res, { pong: true });
+      });
       a.get('/test/boom', () => {
         throw new Error('boom secret-detail');
       });
@@ -73,6 +76,16 @@ describe('GET /healthz', () => {
     expect(res.status).toBe(200);
     expect(body(res)).toEqual({ success: true, data: { status: 'ok' } });
     expect(res.headers['x-request-id']).toMatch(/^[0-9a-f-]{36}$/);
+  });
+});
+
+describe('API base path (CONV-001)', () => {
+  it('serves routers added to `api` under /api/v1 only', async () => {
+    const { app } = build();
+    const ok = await request(app).get('/api/v1/test/ping');
+    expect(ok.status).toBe(200);
+    expect(body(ok).data).toEqual({ pong: true });
+    expect((await request(app).get('/test/ping')).status).toBe(404);
   });
 });
 
