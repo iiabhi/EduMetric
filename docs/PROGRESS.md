@@ -8,7 +8,7 @@ Tests and Security show the verdicts from docs/audits/<feature>/ (PASS / FAIL / 
 | F-02 Docker Compose | Done | PASS | PASS | 4 Low security items (2 accepted), see below |
 | F-03 Database foundation | Done | PASS | PASS | 2 Low security items open (no action needed), see below |
 | FIX-01 Load root .env | Done | PASS | PASS | 2 Low security items open, see below |
-| F-04 Queue and worker | Built, awaiting review | - | - | `tcpProbe.ts` removed (see below) |
+| F-04 Queue and worker | Done | PASS | PASS | 4 Low security items open, see below |
 | F-05 Local auth | Not started | - | - | |
 | F-06 Frontend foundation | Not started | - | - | |
 | F-07 Google OAuth | Not started | - | - | |
@@ -62,6 +62,10 @@ Tests and Security show the verdicts from docs/audits/<feature>/ (PASS / FAIL / 
 - F-03 (first audit): profile update type (Low) fixed: `ProfileChanges` is an allow-list of editable columns; `userId`, timestamps and `onboardingCompletedAt` are ignored
 - F-03 (first audit): seed guard (Low) fixed: the seed runs only when NODE_ENV is development or test
 - F-04: `lib/tcpProbe.ts` and its tests were deleted (dead code once `/readyz` stopped using them). Mention in the F-04 summary
+- F-04: SEC-F-04-01 (Low) open: Compose Redis has no password (localhost only); production password/TLS is F-23
+- F-04: SEC-F-04-02 (Low) open: the worker logs the raw error when a job fails; handlers must use static error messages with no personal data
+- F-04: SEC-F-04-03 (Low) open: no per-job timeout in the worker; every handler's provider calls need their own timeout (PERF-003)
+- F-04: SEC-F-04-04 (Low) accepted by owner: Semgrep partial-parse warning on `scripts/compose-smoke.sh` (shell script with a Node heredoc); no code issue
 - F-04: BullMQ rejects job IDs containing `:`, so use `news-summary-<articleId>`, not the SRD's `news-summary:<articleId>`
 - F-04: every job handler must be idempotent (JOB-015), keep payloads to IDs, and never put secrets or personal data in error messages (failed jobs keep them for 7 days). New job: `defineJob` + `defineHandler`, add the handler to `src/jobs/processors/index.ts` (README "Queue and worker")
 - F-04: F-08 is the first feature to enqueue from the API (add `createJobQueue` to `server.ts`, with a `bullmq`-role Redis client) and the first worker handler that needs Prisma or the email sender (pass them into the handler, add `depends_on` mysql/migrate to the `worker` service)
