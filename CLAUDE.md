@@ -35,7 +35,7 @@ The automated gates in scripts/verify.sh call them by name:
 ## Commands
 - Testing gate: `bash scripts/verify.sh <feature-id>`
 - Security gate: `bash scripts/security-scan.sh <feature-id>`
-- Dev stack: `docker compose up`
+- Dev stack: `cp .env.example .env` once, then `docker compose up` (API on :3000 with `GET /readyz`; Mailpit UI :8025, MinIO console :9001). Test databases: `docker compose --profile test up -d --wait`. Stack acceptance check: `bash scripts/compose-smoke.sh`
 - Dev server: `npm run dev` (API on PORT from .env; `GET /healthz`, OpenAPI JSON at `/api/docs` outside production)
 - Unit tests: `npm test`; unit tests with coverage: `npm run test:coverage`; integration: `npm run test:integration`
 - Unit tests are `*.test.ts` (Supertest against `createApp` counts as unit); `*.int.test.ts` is for tests that need real infrastructure or a spawned process (ADR 0004)
@@ -53,3 +53,4 @@ The automated gates in scripts/verify.sh call them by name:
 - Testing and security verdicts are PASS (or open issues are reported to the user).
 - Definition of Done (SRD Section 27) is met.
 - docs/PROGRESS.md is updated.
+- After the feature is merged, the user may run /save-feature-summary <feature-id> to save a simple interview-study summary in ~/Downloads/Edumetric Study Material (outside the repo).

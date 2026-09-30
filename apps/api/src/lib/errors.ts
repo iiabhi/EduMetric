@@ -83,3 +83,10 @@ export class ProviderUnavailableError extends AppError {
     super(code, message);
   }
 }
+
+/** A required dependency (database, cache) is unreachable. Used by /readyz. */
+export class ServiceUnavailableError extends AppError {
+  constructor(message = 'Service not ready') {
+    super('SERVICE_UNAVAILABLE', message);
+  }
+}
