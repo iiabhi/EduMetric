@@ -15,6 +15,8 @@ F-03 adds Prisma and the identity tables (SRD 12.1, DB-001..008). The SRD only s
 - **Session.replacedById** is a plain column without a foreign key.
 - **Seed** lives in `src/db/seed/` (not `prisma/seed.ts`, which the api tsconfig and ESLint do not cover). The demo student has no password until F-05 adds hashing.
 - **Test database.** Integration tests use `DATABASE_URL` only if its database name ends in `_test` (CI), otherwise the compose test profile (`127.0.0.1:3307`). Any other name is refused.
+- **Connection pool settings.** `DB_POOL_SIZE` (default 10, range 1-100) and `DB_ACQUIRE_TIMEOUT_MS` (default 3000, range 100-60000) are read from the environment, validated in `apps/api/src/config/env.ts` and listed in `.env.example`. The acquire timeout is how long a query waits for a free connection before failing; the adapter's own default is 10 s, which left requests hanging during a database outage. The pool size must stay below MySQL's `max_connections` once the worker (F-04) shares the database, since each process has its own pool.
+- **Error format.** Prisma's `errorFormat` is `minimal` in every environment except `development`. The default format echoes the source lines around the failing call, which would put any literal in the caller's code (and a stack of internals) into logs outside development. Development keeps the detailed format. Integration tests check that a failed connection never puts the password in the thrown error, Prisma's own printed output, our logger output or the API error response.
 - **`db:check-migrations`** replays the migrations in a shadow database on that same test server and fails if `schema.prisma` differs.
 
 ## Consequences
@@ -23,4 +25,11 @@ F-03 adds Prisma and the identity tables (SRD 12.1, DB-001..008). The SRD only s
 - F-05: set an Argon2id password in the demo seeder; consider a foreign key on `Session.replacedById` (new migration).
 - F-09: make the academic fields required in the onboarding Zod schema.
 - Later features add their own tables with their own migration; never edit `init_identity`.
-- F-23: database TLS (`allowPublicKeyRetrieval` is on outside production only), separate migration credentials, Prisma CLI in the production migration step (DOCKER-011).
+- F-23: database TLS (`allowPublicKeyRetrieval` is on in development and test only), separate migration credentials, Prisma CLI in the production migration step (DOCKER-011).
+
+## Security review changes (F-03)
+
+- `allowPublicKeyRetrieval` is enabled only when `NODE_ENV` is `development` or `test` (`allowsPublicKeyRetrieval` in `lib/prisma.ts`).
+- The seed runs only when `NODE_ENV` is `development` or `test` (an allow-list, not "anything but production").
+- `profile.repository.ts` updates an allow-list of editable columns; `userId`, timestamps and `onboardingCompletedAt` can never be changed through it, even if unvalidated input reaches it.
+- The semgrep `child-process` warning in `test-utils/integration-setup.ts` is a confirmed false positive (project owner decision), suppressed with an inline `nosemgrep` comment that states why.

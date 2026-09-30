@@ -1,6 +1,7 @@
 # Local development stack (F-02). Copy .env.example to .env first: passwords come from .env,
 # this file contains no credentials (DOCKER-003).
 # worker (F-04) and web (F-06) are added by those features (docs/decisions/0006).
+# `migrate` (F-03) applies database migrations before the api starts.
 name: edumetrics
 
 services:
@@ -16,6 +17,8 @@ services:
       - '127.0.0.1:3306:3306'
     volumes:
       - mysql-data:/var/lib/mysql
+      # Dev-only grant that lets `prisma migrate dev` create its shadow database (first start only).
+      - ./docker/mysql-init:/docker-entrypoint-initdb.d:ro
     healthcheck:
       test: ['CMD-SHELL', 'mysqladmin ping -h 127.0.0.1 -uroot -p"$$MYSQL_ROOT_PASSWORD" --silent']
       interval: 5s
@@ -100,6 +103,26 @@ services:
       retries: 10
       start_period: 20s
 
+  # One-shot (DOCKER-011): applies committed migrations once, before the api starts, so containers
+  # never migrate concurrently. Exits 0 when done. Create new migrations with
+  # `docker compose run --rm api npm run db:migrate:dev -- --name <name>`.
+  migrate:
+    build:
+      context: .
+      target: dev
+    restart: 'no'
+    env_file: .env
+    environment:
+      NODE_ENV: development
+      DATABASE_URL: mysql://${MYSQL_USER}:${MYSQL_PASSWORD}@mysql:3306/${MYSQL_DATABASE}
+    command: ['npm', 'run', 'db:migrate:deploy']
+    volumes:
+      - .:/app
+      - /app/node_modules
+    depends_on:
+      mysql:
+        condition: service_healthy
+
   # Does not depend on leetcode-api: LeetCode being down is a handled provider outage (DOCKER-009).
   api:
     build:
@@ -121,6 +144,8 @@ services:
         condition: service_healthy
       redis:
         condition: service_healthy
+      migrate:
+        condition: service_completed_successfully
     healthcheck:
       test: ['CMD', 'wget', '-q', '-O', '/dev/null', 'http://localhost:3000/readyz']
       interval: 5s

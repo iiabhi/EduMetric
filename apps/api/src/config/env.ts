@@ -13,6 +13,8 @@ export interface Config {
   appBaseUrl: string;
   corsOrigins: string[];
   databaseUrl: string;
+  dbPoolSize: number;
+  dbAcquireTimeoutMs: number;
   redisUrl: string;
   newsProvider: 'none' | 'mock';
   aiProvider: 'none' | 'mock';
@@ -76,6 +78,16 @@ const corsOriginsSchema = z
       'must be a comma-separated list of http(s) origins (no wildcard, path or trailing slash)',
   });
 
+const boundedInt = (min: number, max: number, fallback: number) => {
+  const message = `must be an integer between ${String(min)} and ${String(max)}`;
+  return z.coerce
+    .number({ error: message })
+    .int({ error: message })
+    .min(min, { error: message })
+    .max(max, { error: message })
+    .default(fallback);
+};
+
 const envSchema = z.object({
   NODE_ENV: z
     .enum(NODE_ENVS, { error: `must be one of ${NODE_ENVS.join(', ')}` })
@@ -92,6 +104,8 @@ const envSchema = z.object({
   APP_BASE_URL: urlWithProtocol(['http:', 'https:'], 'http(s)'),
   CORS_ORIGINS: corsOriginsSchema,
   DATABASE_URL: urlWithProtocol(['mysql:'], 'mysql://'),
+  DB_POOL_SIZE: boundedInt(1, 100, 10),
+  DB_ACQUIRE_TIMEOUT_MS: boundedInt(100, 60_000, 3000),
   REDIS_URL: urlWithProtocol(['redis:', 'rediss:'], 'redis:// or rediss://'),
   NEWS_PROVIDER: z.enum(['none', 'mock'], { error: 'must be one of none, mock' }).default('none'),
   AI_PROVIDER: z.enum(['none', 'mock'], { error: 'must be one of none, mock' }).default('none'),
@@ -142,6 +156,8 @@ export const loadConfig = (env: Record<string, string | undefined>): Config => {
     appBaseUrl: v.APP_BASE_URL,
     corsOrigins: v.CORS_ORIGINS,
     databaseUrl: v.DATABASE_URL,
+    dbPoolSize: v.DB_POOL_SIZE,
+    dbAcquireTimeoutMs: v.DB_ACQUIRE_TIMEOUT_MS,
     redisUrl: v.REDIS_URL,
     newsProvider: v.NEWS_PROVIDER,
     aiProvider: v.AI_PROVIDER,

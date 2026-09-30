@@ -1,4 +1,4 @@
-import { execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process'; // nosemgrep: edumetrics.child-process -- test-only setup, fixed binary and fixed arguments, approved by project owner in F-03 security review
 import { fileURLToPath } from 'node:url';
 import { testDatabaseUrl } from './db.js';
 

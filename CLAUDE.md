@@ -39,6 +39,7 @@ The automated gates in scripts/verify.sh call them by name:
 - Dev server: `npm run dev` (API on PORT from .env; `GET /healthz`, OpenAPI JSON at `/api/docs` outside production)
 - Unit tests: `npm test`; unit tests with coverage: `npm run test:coverage`; integration: `npm run test:integration`
 - Unit tests are `*.test.ts` (Supertest against `createApp` counts as unit); `*.int.test.ts` is for tests that need real infrastructure or a spawned process (ADR 0004)
+- Database (F-03): migrations are committed and applied by the `migrate` compose service; create one with `docker compose run --rm api npm run db:migrate:dev -- --name <name>`; seed with `npm run db:seed`; after editing `schema.prisma` run `npm run db:generate`. Integration tests only run against a database named `*_test` (compose test profile).
 - Docs: ADRs in docs/decisions/, plans in docs/plans/
 
 ## Feature completion gate (automatic)

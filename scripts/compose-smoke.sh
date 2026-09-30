@@ -1,5 +1,5 @@
 #!/usr/bin/env bash
-# Manual acceptance check for F-02 (Docker Compose dev stack). Needs Docker and a .env file.
+# Manual acceptance check for F-02 (Docker Compose dev stack) and F-03 (migrations and seed). Needs Docker and a .env file.
 # Not part of scripts/verify.sh: CI has no Compose stack. Leaves the stack running when done.
 # Usage: cp .env.example .env && bash scripts/compose-smoke.sh
 set -euo pipefail
@@ -42,7 +42,7 @@ const errors = [];
 const expect = (ok, message) => { if (!ok) errors.push(message); };
 
 for (const [name, svc] of Object.entries(services)) {
-  if (name !== 'minio-init') expect(svc.healthcheck && svc.healthcheck.test, `${name}: missing healthcheck`);
+  if (name !== 'minio-init' && name !== 'migrate') expect(svc.healthcheck && svc.healthcheck.test, `${name}: missing healthcheck`);
   for (const port of svc.ports ?? []) {
     expect(port.host_ip === '127.0.0.1', `${name}: port ${port.published} is not bound to 127.0.0.1`);
   }
@@ -58,6 +58,9 @@ for (const dep of ['mysql', 'redis']) {
   expect(api.depends_on?.[dep]?.condition === 'service_healthy', `api: depends_on ${dep} must be service_healthy`);
 }
 expect(services['minio-init'].depends_on?.minio?.condition === 'service_healthy', 'minio-init: must wait for minio');
+expect(api.depends_on?.migrate?.condition === 'service_completed_successfully', 'api: must wait for migrate to complete (DOCKER-011)');
+expect(services.migrate.depends_on?.mysql?.condition === 'service_healthy', 'migrate: must wait for mysql');
+expect(!(services.migrate.ports?.length), 'migrate: must not publish ports');
 
 for (const [name, svc] of Object.entries(services)) {
   if (name.endsWith('-test')) expect((svc.profiles ?? []).includes('test'), `${name}: must be in the test profile`);
@@ -94,6 +97,24 @@ init_exit="$(docker inspect --format '{{.State.ExitCode}}' "$(docker compose ps 
 BUCKET="$(grep -E '^S3_BUCKET=' .env | cut -d= -f2-)"
 check "bucket $BUCKET exists in minio" docker compose exec -T -e MC_CONFIG_DIR=/tmp/.mc minio sh -c \
   'mc alias set local http://localhost:9000 "$MINIO_ROOT_USER" "$MINIO_ROOT_PASSWORD" && mc ls "local/'"$BUCKET"'"'
+
+echo "== Migrations (F-03) =="
+# A container that was only created also reports exit code 0, so require that it actually ran.
+migrate_state="$(docker inspect --format '{{.State.Status}} {{.State.ExitCode}}' "$(docker compose ps -a -q migrate)" 2>/dev/null || echo missing)"
+[ "$migrate_state" = "exited 0" ] && pass "migrate ran and exited 0 on a clean stack" || fail "migrate state: $migrate_state"
+mysql_query() { docker compose exec -T mysql sh -c 'mysql -N -u"$MYSQL_USER" -p"$MYSQL_PASSWORD" "$MYSQL_DATABASE" -e "$1"' _ "$1" 2>/dev/null; }
+tables="$(mysql_query 'SHOW TABLES' || true)"
+for table in User OAuthAccount Session AuthToken StudentProfile _prisma_migrations; do
+  echo "$tables" | grep -qx "$table" && pass "table $table exists" || fail "table $table is missing"
+done
+docker compose run --rm migrate >/tmp/compose-migrate-again.log 2>&1 && pass "migrate deploy is idempotent (second run exits 0)" || fail "second migrate run failed (see /tmp/compose-migrate-again.log)"
+# `migrate dev` replays migrations in a shadow database, so this proves the app user's shadow-DB grant.
+dev_out="$(docker compose exec -T api npm run db:migrate:dev 2>&1 || true)"
+echo "$dev_out" | grep -qi "in sync" && pass "migrate dev works as the app user (schema in sync)" || { fail "migrate dev did not report in sync"; echo "$dev_out" | tail -8; }
+
+echo "== Seed is idempotent (F-03) =="
+docker compose exec -T api npm run db:seed >/tmp/compose-seed-1.log 2>&1 && docker compose exec -T api npm run db:seed >/tmp/compose-seed-2.log 2>&1 && pass "db:seed runs twice without error" || fail "db:seed failed (see /tmp/compose-seed-*.log)"
+[ "$(mysql_query "SELECT COUNT(*) FROM User WHERE email = 'demo@edumetrics.local'")" = "1" ] && pass "exactly one demo student after two seed runs" || fail "demo student count is not 1"
 
 echo "== /readyz =="
 [ "$(status_of)" = "200" ] && pass "/readyz is 200 with mysql and redis up" || fail "/readyz is not 200"

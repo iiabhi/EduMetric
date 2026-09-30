@@ -1,4 +1,5 @@
 import { createPrismaClient } from '../lib/prisma.js';
+import { testConfig } from './config.js';
 
 const COMPOSE_TEST_DATABASE_URL = 'mysql://root@127.0.0.1:3307/edumetrics_test';
 
@@ -21,7 +22,7 @@ export const testDatabaseUrl = (env: Record<string, string | undefined> = proces
 };
 
 export const createTestPrisma = () =>
-  createPrismaClient({ databaseUrl: testDatabaseUrl(), isProduction: false });
+  createPrismaClient(testConfig({ DATABASE_URL: testDatabaseUrl() }));
 
 export type TestPrisma = ReturnType<typeof createTestPrisma>;
 

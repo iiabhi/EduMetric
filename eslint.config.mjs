@@ -35,6 +35,14 @@ export default tseslint.config(
     },
   },
   {
+    // Test files only. Tests such as apps/api/src/architecture.test.ts read the project's own
+    // source files to check layering rules, so their fs paths are built at run time. The rule
+    // guards application code against attacker-controlled paths, which tests do not take as
+    // input. It stays on for all non-test code.
+    files: ['**/*.test.ts'],
+    rules: { 'security/detect-non-literal-fs-filename': 'off' },
+  },
+  {
     files: ['**/*.mjs', '**/*.config.ts'],
     ...tseslint.configs.disableTypeChecked,
   },
