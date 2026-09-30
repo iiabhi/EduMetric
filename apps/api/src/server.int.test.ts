@@ -17,13 +17,15 @@ const validEnv = {
   REDIS_URL: 'redis://localhost:6379',
 };
 
-// Run from an empty directory so a developer's local .env cannot fill in missing variables.
+// Run from an empty directory and point ENV_FILE at a file that does not exist, so a developer's
+// real repo-root .env cannot fill in missing variables.
 const emptyCwd = mkdtempSync(join(tmpdir(), 'edumetrics-cfg-'));
+const noEnvFile = join(emptyCwd, 'no-such.env');
 
 const runServer = (env: Record<string, string>) =>
   spawnSync(tsx, [serverEntry], {
     cwd: emptyCwd,
-    env: { PATH: process.env.PATH ?? '', ...env },
+    env: { PATH: process.env.PATH ?? '', ENV_FILE: noEnvFile, ...env },
     encoding: 'utf8',
     timeout: 20_000,
   });
@@ -79,7 +81,13 @@ describe('server runtime', () => {
     const port = await freePort();
     const child = spawn(tsx, [serverEntry], {
       cwd: emptyCwd,
-      env: { PATH: process.env.PATH ?? '', ...validEnv, PORT: String(port), LOG_LEVEL: 'info' },
+      env: {
+        PATH: process.env.PATH ?? '',
+        ENV_FILE: noEnvFile,
+        ...validEnv,
+        PORT: String(port),
+        LOG_LEVEL: 'info',
+      },
     });
     let stdout = '';
     child.stdout.on('data', (chunk: Buffer) => {

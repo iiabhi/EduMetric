@@ -1,4 +1,3 @@
-import { config as loadDotenv } from 'dotenv';
 import { createApp } from './app.js';
 import { loadConfigOrExit } from './config/index.js';
 import { createLogger } from './lib/logger.js';
@@ -7,7 +6,6 @@ import { buildReadinessChecks } from './modules/health/health.checks.js';
 
 const SHUTDOWN_TIMEOUT_MS = 10_000;
 
-loadDotenv({ quiet: true });
 const config = loadConfigOrExit();
 const logger = createLogger(config);
 // Connects lazily, so the API starts even while MySQL is down. Feature modules receive it in later features.

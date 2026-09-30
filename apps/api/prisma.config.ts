@@ -1,5 +1,8 @@
-import 'dotenv/config';
 import { defineConfig } from 'prisma/config';
+import { loadEnvFile } from './src/config/loadEnv.js';
+
+// The same .env loading as the API (repo-root file, real environment variables win).
+loadEnvFile();
 
 // url is optional so `prisma generate` and `prisma validate` work without a database (CI, Docker build).
 export default defineConfig({

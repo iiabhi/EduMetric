@@ -10,9 +10,11 @@ USER node
 COPY --chown=node:node package.json package-lock.json ./
 COPY --chown=node:node apps/api/package.json apps/api/
 COPY --chown=node:node packages/shared/package.json packages/shared/
-# postinstall runs `prisma generate`, which needs the schema and config.
+# postinstall runs `prisma generate`, which needs the schema, the config and the config's local import
+# (apps/api/src/config/dockerBuild.test.ts fails if this list misses one).
 COPY --chown=node:node apps/api/prisma apps/api/prisma/
 COPY --chown=node:node apps/api/prisma.config.ts apps/api/
+COPY --chown=node:node apps/api/src/config/loadEnv.ts apps/api/src/config/
 RUN npm ci
 
 # Source is bind-mounted by docker-compose.yml for hot reload; this copy makes the image runnable alone.

@@ -8,9 +8,11 @@ Student platform monorepo (npm workspaces): `apps/api` (Express API, Prisma/MySQ
 nvm use            # Node 20+
 npm install
 cp .env.example .env
-npm run dev        # builds packages/shared, then starts the API with tsx watch
+npm run dev        # builds packages/shared, generates the Prisma client, starts the API with tsx watch
 curl -i http://localhost:3000/healthz
 ```
+
+`.env` is read from the repo root by the API and by the `db:*` commands, from any directory. Variables already set in the environment (Docker, CI, production) win over the file. `ENV_FILE=/path/to/file` selects a different file. With `NODE_ENV=production` no file is read at all.
 
 ### Full stack with Docker Compose
 
