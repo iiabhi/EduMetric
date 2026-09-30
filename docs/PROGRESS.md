@@ -8,7 +8,7 @@ Tests and Security show the verdicts from docs/audits/<feature>/ (PASS / FAIL / 
 | F-02 Docker Compose | Done | PASS | PASS | 4 Low security items (2 accepted), see below |
 | F-03 Database foundation | Done | PASS | PASS | 2 Low security items open (no action needed), see below |
 | FIX-01 Load root .env | Done | PASS | PASS | 2 Low security items open, see below |
-| F-04 Queue and worker | Not started | - | - | |
+| F-04 Queue and worker | Built, awaiting review | - | - | `tcpProbe.ts` removed (see below) |
 | F-05 Local auth | Not started | - | - | |
 | F-06 Frontend foundation | Not started | - | - | |
 | F-07 Google OAuth | Not started | - | - | |
@@ -38,6 +38,7 @@ Tests and Security show the verdicts from docs/audits/<feature>/ (PASS / FAIL / 
 - 0006 Compose: worker and web deferred; MinIO image source
 - 0007 Prisma 7 setup, dependency overrides, F-03 schema choices
 - 0008 Root .env loaded in one place by file location (FIX-01)
+- 0009 Queue and worker design; `/readyz` uses `SELECT 1` and `PING` (F-04)
 
 ## Known gaps / follow-ups
 - FIX-01: two unexplained intermittent failures in the unit run under coverage (a `/healthz` 404 in `health.test.ts`, a CORS preflight test), not reproduced in about 50 later runs and none in the FIX-01 re-run. If it recurs, keep the failing run's log before re-running
@@ -52,7 +53,7 @@ Tests and Security show the verdicts from docs/audits/<feature>/ (PASS / FAIL / 
 - F-02: SEC-F-02-01 (Low) accepted: unmaintained MinIO image is dev-only; revisit when S3 is integrated (F-11)
 - F-02: SEC-F-02-03 (Low) accepted: `/readyz` unthrottled; the rate-limiting feature (SEC-016) covers it
 - F-02: SEC-F-02-02, -04 (Low) open: tag-only image pins, placeholder passwords in `.env.example` (dev only)
-- F-02: `/readyz` only proves ports accept connections. F-04 should switch to Prisma `SELECT 1` and Redis `PING` (ADR 0005; moved from F-03, which keeps the TCP probe)
+- F-02: `/readyz` only proved ports accept connections: fixed in F-04, it now runs Prisma `SELECT 1` and Redis `PING` (ADR 0009)
 - F-02: MinIO runs from the frozen `bitnamilegacy/minio` image because official images are gone; revisit before F-11 if a maintained option exists (ADR 0006)
 - F-03: resolved: `migrate dev` works in Compose through a dev-only MySQL init grant (`docker/mysql-init/`); existing volumes need `docker compose down -v` once
 - F-03 (first audit): `allowPublicKeyRetrieval` (Low) fixed: `allowPublicKeyRetrieval` only in development/test; production TLS is an F-23 follow-up below
@@ -60,6 +61,14 @@ Tests and Security show the verdicts from docs/audits/<feature>/ (PASS / FAIL / 
 - F-03: SEC-F-03-02 (Low) open, optional: `prisma.config.ts` falls back to an empty `DATABASE_URL` so `generate`/`validate` work without a database; migrate commands fail closed without a URL
 - F-03 (first audit): profile update type (Low) fixed: `ProfileChanges` is an allow-list of editable columns; `userId`, timestamps and `onboardingCompletedAt` are ignored
 - F-03 (first audit): seed guard (Low) fixed: the seed runs only when NODE_ENV is development or test
+- F-04: `lib/tcpProbe.ts` and its tests were deleted (dead code once `/readyz` stopped using them). Mention in the F-04 summary
+- F-04: BullMQ rejects job IDs containing `:`, so use `news-summary-<articleId>`, not the SRD's `news-summary:<articleId>`
+- F-04: every job handler must be idempotent (JOB-015), keep payloads to IDs, and never put secrets or personal data in error messages (failed jobs keep them for 7 days). New job: `defineJob` + `defineHandler`, add the handler to `src/jobs/processors/index.ts` (README "Queue and worker")
+- F-04: F-08 is the first feature to enqueue from the API (add `createJobQueue` to `server.ts`, with a `bullmq`-role Redis client) and the first worker handler that needs Prisma or the email sender (pass them into the handler, add `depends_on` mysql/migrate to the `worker` service)
+- F-04: F-14/F-15 use `createOutboundLimiter` with names `codeforces` and `leetcode` and intervals from `CODEFORCES_MIN_INTERVAL_MS` / `LEETCODE_MIN_INTERVAL_MS`; request path passes `maxWaitMs`, workers do not. Codeforces "Call limit exceeded" needs a retry delay of at least 2 s (JOB-009)
+- F-04: API request rate limiting (SEC-016, F-05) is a separate limiter with an in-memory fallback; the outbound limiter is not that
+- F-04: integration tests use a unique Redis key prefix per run and never `FLUSHALL`; the spawned-process tests run `node --import tsx` (the `tsx` wrapper leaves an orphan on SIGKILL)
+- F-23: Redis password/TLS and AOF in production (SEC-007, DOCKER-005), worker production command `start:worker`, metrics (queue depth, limiter waits, SRD 21)
 - F-05: demo account password comes from an env var; no demo account outside development/test.
 - F-03 follow-ups for later features:
   - F-05: set an Argon2id password in `src/db/seed/demoStudent.ts` (demo student has no password now; password from an env var); consider a real foreign key on `Session.replacedById` (new migration)

@@ -16,6 +16,13 @@ export const createTestRedis = (role: RedisRole = 'bullmq'): RedisClient =>
     role,
   );
 
+/** A client that is already connected. The `api` role has no offline queue, so commands sent earlier fail. */
+export const createReadyTestRedis = async (role: RedisRole = 'api'): Promise<RedisClient> => {
+  const redis = createTestRedis(role);
+  await waitFor(() => redis.status === 'ready');
+  return redis;
+};
+
 /**
  * Every integration run uses its own key prefix and deletes only keys under it, so tests never need
  * FLUSHALL and cannot damage a development Redis even if REDIS_URL points at one.

@@ -4,7 +4,6 @@ import { createApp } from '../../app.js';
 import { createLogger } from '../../lib/logger.js';
 import { testConfig } from '../../test-utils/config.js';
 import { LogCapture } from '../../test-utils/log-capture.js';
-import { buildReadinessChecks } from './health.checks.js';
 import type { ReadinessCheck } from './health.service.js';
 
 const build = (checks?: ReadinessCheck[]) => {
@@ -73,12 +72,5 @@ describe('GET /readyz', () => {
     const { app } = build();
     const res = await request(app).get('/api/docs');
     expect((res.body as { paths: Record<string, unknown> }).paths['/readyz']).toBeDefined();
-  });
-});
-
-describe('buildReadinessChecks', () => {
-  it('builds mysql and redis checks from the config URLs', () => {
-    const checks = buildReadinessChecks(testConfig());
-    expect(checks.map((c) => c.name)).toEqual(['mysql', 'redis']);
   });
 });

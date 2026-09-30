@@ -1,6 +1,6 @@
 # 0005: `/readyz` uses a TCP probe and a new `SERVICE_UNAVAILABLE` code
 
-Status: accepted (F-02)
+Status: accepted (F-02). The TCP probe was replaced by `SELECT 1` and `PING` in F-04, see ADR 0009. The `SERVICE_UNAVAILABLE` code and the response shape still apply.
 
 ## Context
 

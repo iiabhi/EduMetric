@@ -18,6 +18,8 @@ export default defineConfig({
         '**/types/**',
         '**/generated/**',
         'apps/api/src/server.ts',
+        'apps/api/src/worker.ts',
+        'apps/api/src/cli/**',
         'apps/api/src/db/seed/run.ts',
         'apps/api/src/config/index.ts',
         '**/index.ts',
