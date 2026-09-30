@@ -1,0 +1,77 @@
+# Runs the same testing and security gates as Claude Code and the pre-push hook,
+# on every pull request and every push to main. A failing gate blocks the merge
+# once you mark this check as required in the repository's branch protection.
+name: quality-gate
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  testing:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    services:
+      mysql:
+        image: mysql:8.4
+        env:
+          MYSQL_ROOT_PASSWORD: ci_root_password
+          MYSQL_DATABASE: edumetrics_test
+        ports: ["3306:3306"]
+        options: >-
+          --health-cmd="mysqladmin ping -h localhost -pci_root_password"
+          --health-interval=5s --health-timeout=5s --health-retries=20
+      redis:
+        image: redis:7
+        ports: ["6379:6379"]
+        options: >-
+          --health-cmd="redis-cli ping" --health-interval=5s
+          --health-timeout=5s --health-retries=20
+    env:
+      # CI-only values. Real secrets never live in the repo.
+      NODE_ENV: test
+      DATABASE_URL: mysql://root:ci_root_password@127.0.0.1:3306/edumetrics_test
+      REDIS_URL: redis://127.0.0.1:6379
+      SKIP_COMPOSE: "1"
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Apply migrations to the CI database
+        run: npm run --if-present db:migrate:deploy
+      - name: Testing gate
+        run: bash scripts/verify.sh ci
+      - name: Upload test reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: testing-reports
+          path: docs/audits/ci/
+
+  security:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0   # full history so gitleaks scans past commits too
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+      - run: npm ci
+      - name: Security gate
+        run: bash scripts/security-scan.sh ci
+      - name: Upload security reports
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: security-reports
+          path: docs/audits/ci/

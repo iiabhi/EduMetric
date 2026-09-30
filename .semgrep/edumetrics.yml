@@ -1,0 +1,134 @@
+# EduMetrics project-specific security rules (run by scripts/security-scan.sh).
+# ERROR findings fail the security gate. WARNING findings are triaged by the security auditor.
+# Each rule references the SRD requirement it enforces.
+
+rules:
+  - id: edumetrics.prisma-raw-unsafe
+    message: >-
+      $queryRawUnsafe / $executeRawUnsafe allow SQL injection. Use Prisma.$queryRaw
+      tagged templates (SRD DB-007, SEC-010).
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: '\$(queryRawUnsafe|executeRawUnsafe)\s*\('
+    paths:
+      include: ["*.ts", "*.tsx", "*.js", "*.mjs", "*.cjs"]
+
+  - id: edumetrics.dangerously-set-inner-html
+    message: >-
+      Raw HTML injection. Render content/AI text through the allow-list sanitizer
+      component instead (SRD SEC-018).
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: 'dangerouslySetInnerHTML'
+    paths:
+      include: ["*.tsx", "*.jsx", "*.ts", "*.js"]
+
+  - id: edumetrics.token-in-web-storage
+    message: >-
+      Tokens must never be stored in localStorage/sessionStorage. Keep the access
+      token in memory; the refresh token is an httpOnly cookie (SRD AUTH-009, AUTH-010).
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: '(?i)(localStorage|sessionStorage)\.setItem\(\s*[^,]*(token|jwt|access|refresh|auth)'
+    paths:
+      include: ["*.ts", "*.tsx", "*.js", "*.jsx"]
+
+  - id: edumetrics.cors-wildcard
+    message: >-
+      CORS must use the explicit CORS_ORIGINS allow-list, never '*' or origin:true
+      (SRD SEC-012).
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: 'origin\s*:\s*(''\*''|"\*"|true\b)'
+    paths:
+      include: ["*.ts", "*.js"]
+      exclude: ["*.test.ts", "*.spec.ts"]
+
+  - id: edumetrics.tls-verification-disabled
+    message: TLS certificate verification must not be disabled.
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: '(rejectUnauthorized\s*:\s*false|NODE_TLS_REJECT_UNAUTHORIZED)'
+    paths:
+      include: ["*.ts", "*.js", "*.mjs", "*.cjs", "*.yml", "*.yaml", "*.env*"]
+
+  - id: edumetrics.eval
+    message: eval / new Function execute arbitrary code.
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: '(\beval\s*\(|new\s+Function\s*\()'
+    paths:
+      include: ["*.ts", "*.tsx", "*.js", "*.jsx"]
+
+  - id: edumetrics.ssrf-user-url
+    message: >-
+      Outbound request built from request input. The server must never fetch
+      user-supplied URLs; outbound calls go only to configured provider base URLs
+      (SRD SEC-019).
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: '(fetch|axios(\.(get|post|put|request))?|got|request)\(\s*`?\$?\{?\s*req\.(body|query|params)'
+    paths:
+      include: ["*.ts", "*.js"]
+
+  - id: edumetrics.jwt-decode-without-verify
+    message: >-
+      jwt.decode does not verify signatures. Use jwt.verify with pinned algorithm,
+      issuer and audience (SRD AUTH-009).
+    severity: WARNING
+    languages: [regex]
+    pattern-regex: '\bjwt\.decode\s*\('
+    paths:
+      include: ["*.ts", "*.js"]
+      exclude: ["*.test.ts", "*.spec.ts"]
+
+  - id: edumetrics.insecure-randomness
+    message: >-
+      Math.random is not cryptographically secure. Use crypto.randomBytes /
+      crypto.randomUUID for tokens, IDs, nonces and PKCE values.
+    severity: WARNING
+    languages: [regex]
+    pattern-regex: 'Math\.random\s*\('
+    paths:
+      include: ["apps/api/**/*.ts", "packages/**/*.ts"]
+      exclude: ["*.test.ts", "*.spec.ts", "**/mock/**", "**/fixtures/**"]
+
+  - id: edumetrics.sensitive-data-in-logs
+    message: >-
+      Possible password/token/secret in a log call. Rely on logger redaction and
+      never log these values (SRD SEC-014).
+    severity: WARNING
+    languages: [regex]
+    pattern-regex: '(?i)(console\.(log|info|warn|error|debug)|logger\.(trace|debug|info|warn|error|fatal)|log\.(debug|info|warn|error))\([^;]*\b(password|passwd|secret|token|authorization|cookie|apikey|api_key)\b'
+    paths:
+      include: ["*.ts", "*.js"]
+      exclude: ["*.test.ts", "*.spec.ts"]
+
+  - id: edumetrics.child-process
+    message: Shelling out from application code needs explicit justification.
+    severity: WARNING
+    languages: [regex]
+    pattern-regex: '(child_process|\bexecSync\s*\(|\bspawnSync\s*\()'
+    paths:
+      include: ["apps/**/*.ts", "packages/**/*.ts"]
+      exclude: ["*.test.ts", "**/cli/**", "**/scripts/**"]
+
+  - id: edumetrics.live-provider-in-tests
+    message: >-
+      Tests must not call live Codeforces or LeetCode; use recorded fixtures
+      (SRD CI-004, implementation note 21).
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: '(https?://codeforces\.com/api|alfa-leetcode-api\.onrender\.com)'
+    paths:
+      include: ["*.test.ts", "*.spec.ts", "**/__tests__/**"]
+
+  - id: edumetrics.public-leetcode-demo-instance
+    message: >-
+      The public alfa-leetcode-api demo instance must never be used by the app;
+      use LEETCODE_BASE_URL (self-hosted container) (SRD FR-026).
+    severity: ERROR
+    languages: [regex]
+    pattern-regex: 'alfa-leetcode-api\.onrender\.com'
+    paths:
+      include: ["apps/**", "packages/**", "*.env*", "docker-compose*.yml", "compose*.yml"]

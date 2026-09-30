@@ -1,0 +1,22 @@
+#!/usr/bin/env bash
+# Git pre-push hook: runs the testing and security gates before anything leaves your machine.
+# Enable once per clone:   git config core.hooksPath .githooks
+# Emergency bypass (not recommended):   git push --no-verify
+
+set -uo pipefail
+ROOT="$(git rev-parse --show-toplevel)"
+cd "$ROOT" || exit 1
+
+echo "pre-push: running testing gate..."
+if ! bash scripts/verify.sh pre-push; then
+  echo "pre-push: BLOCKED - testing gate failed. See docs/audits/pre-push/verify.md"
+  exit 1
+fi
+
+echo "pre-push: running security gate..."
+if ! bash scripts/security-scan.sh pre-push; then
+  echo "pre-push: BLOCKED - security gate failed. See docs/audits/pre-push/security-scan.md"
+  exit 1
+fi
+
+echo "pre-push: all gates passed."

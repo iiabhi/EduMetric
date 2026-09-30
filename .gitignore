@@ -1,0 +1,17 @@
+# --- dependencies / build output
+node_modules/
+dist/
+build/
+coverage/
+
+# --- environment (never commit real secrets)
+.env
+.env.*
+!.env.example
+
+# --- Claude Code local state (feature gate marker, per-machine settings)
+.claude/state/
+.claude/settings.local.json
+
+# --- raw scanner/test output (the markdown reports in docs/audits are committed)
+docs/audits/*/raw/

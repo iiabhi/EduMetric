@@ -1,0 +1,39 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(bash scripts/verify.sh *)",
+      "Bash(bash scripts/security-scan.sh *)",
+      "Bash(npm run *)",
+      "Bash(npm test *)",
+      "Bash(npm audit *)",
+      "Bash(git diff *)",
+      "Bash(git status *)",
+      "Bash(git log *)",
+      "Bash(mkdir -p .claude/state *)",
+      "Bash(rm -f .claude/state/*)"
+    ],
+    "deny": [
+      "Read(./.env)",
+      "Read(./.env.local)",
+      "Read(./.env.production)",
+      "Read(./.env.development)",
+      "Bash(git push *)"
+    ]
+  },
+  "hooks": {
+    "Stop": [
+      {
+        "hooks": [
+          {
+            "type": "command",
+            "command": "bash",
+            "args": [
+              "${CLAUDE_PROJECT_DIR}/.claude/hooks/require-feature-gate.sh"
+            ],
+            "timeout": 30
+          }
+        ]
+      }
+    ]
+  }
+}

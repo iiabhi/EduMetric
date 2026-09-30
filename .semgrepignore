@@ -1,0 +1,12 @@
+# Paths semgrep skips (this file replaces semgrep's defaults).
+:include .gitignore
+node_modules/
+dist/
+build/
+coverage/
+.turbo/
+docs/
+.semgrep/
+.claude/
+**/fixtures/**/*.json
+*.min.js
