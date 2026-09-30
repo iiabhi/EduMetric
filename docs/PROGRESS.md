@@ -7,6 +7,7 @@ Tests and Security show the verdicts from docs/audits/<feature>/ (PASS / FAIL / 
 | F-01 Repo scaffold | Done | PASS | PASS | 3 Low security items open, see below |
 | F-02 Docker Compose | Done | PASS | PASS | 4 Low security items (2 accepted), see below |
 | F-03 Database foundation | Done | PASS | PASS | 2 Low security items open (no action needed), see below |
+| FIX-01 Load root .env | Done | PASS | PASS | 2 Low security items open, see below |
 | F-04 Queue and worker | Not started | - | - | |
 | F-05 Local auth | Not started | - | - | |
 | F-06 Frontend foundation | Not started | - | - | |
@@ -36,8 +37,14 @@ Tests and Security show the verdicts from docs/audits/<feature>/ (PASS / FAIL / 
 - 0005 `/readyz` TCP probe and `SERVICE_UNAVAILABLE` code
 - 0006 Compose: worker and web deferred; MinIO image source
 - 0007 Prisma 7 setup, dependency overrides, F-03 schema choices
+- 0008 Root .env loaded in one place by file location (FIX-01)
 
 ## Known gaps / follow-ups
+- FIX-01: two unexplained intermittent failures in the unit run under coverage (a `/healthz` 404 in `health.test.ts`, a CORS preflight test), not reproduced in about 50 later runs and none in the FIX-01 re-run. If it recurs, keep the failing run's log before re-running
+- FIX-01: SEC-FIX-01-01 (Low) fixed (owner decision): with `NODE_ENV=production` no `.env` is read and `ENV_FILE` is ignored
+- FIX-01: SEC-FIX-01-03 (Low) open: the production guard matches only the real `NODE_ENV=production` (exact, lowercase). It does not cover `NODE_ENV` set only in the `.env` file or left unset. Optional: trim/lowercase the value and/or fail startup when `NODE_ENV` is unset outside tests. F-23's image must set `ENV NODE_ENV=production`
+- FIX-01: SEC-FIX-01-02 (Low) open: the dev Dockerfile's `COPY . .` relies on `.dockerignore` to keep `.env` out. F-23's production image should be multi-stage (only `dist` and production dependencies) and have a test that `.env` is ignored
+- FIX-01: F-04's `worker.ts` must get its config through `loadConfigOrExit()` (it loads the root `.env`); do not call dotenv directly. Spawned-process tests set `ENV_FILE` to a missing file; anything `prisma.config.ts` imports locally must be copied in the Dockerfile before `npm ci`
 - F-01: SEC-F-01-02 `validate()` drops object-level refinements (fix before a feature needs cross-field rules)
 - F-01: SEC-F-01-03 add `TRUST_PROXY` (hop count) when rate limiting lands (SEC-016)
 - F-01: SEC-F-01-04 extend logger redaction names (`idToken`, `codeVerifier`, `apiKey`, `secret`) with the auth/OAuth features
